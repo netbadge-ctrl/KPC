@@ -1,0 +1,5 @@
+{
+  "name": "KPC AI Forge",
+  "description": "An intelligent frontend generation platform leveraging Plan & Execute agents to build KPC-based interfaces.",
+  "requestFramePermissions": []
+}
