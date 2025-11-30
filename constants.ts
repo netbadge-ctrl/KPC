@@ -1,69 +1,115 @@
-import { PlanData } from './types';
 
 export const INITIAL_CODE = `<!-- 等待输入中... -->
 <div class="flex items-center justify-center h-screen text-gray-500">
   <p>尚未生成代码。</p>
 </div>`;
 
-export const MOCK_PLAN: PlanData = {
-  thought_process: "正在分析用户的登录页需求。这属于标准的 B 端业务场景。需要一个强风格的认证布局。",
-  component_list: ["KPC/Form", "KPC/Input", "KPC/Button", "KPC/Message", "KPC/Card"],
-  layout_strategy: "居中卡片布局，配合模糊背景。输入框采用双列或单列垂直排列。",
+export const MOCK_PLAN = {
+  thought_process: "这是一个模拟的思考过程，用于演示系统在没有连接真实 AI 服务时的响应。首先，我将分析用户的需求，确定页面布局和所需组件。接着，制定详细的实施步骤。",
+  component_list: ["KPC/Card", "KPC/Button", "KPC/Input", "Layout/FlexContainer"],
+  layout_strategy: "使用 Flexbox 实现垂直居中布局，确保在不同屏幕尺寸下的适配性。主要内容区域包含在一个居中的卡片容器中。",
   implementation_steps: [
-    "1. 初始化 Vue 3 组件结构。",
-    "2. 引入 KPC 组件 (Form, FormItem, Input, Button)。",
-    "3. 创建用户名和密码的响应式状态 (Reactive State)。",
-    "4. 实现表单验证规则。",
-    "5. 添加模拟提交处理函数与 Message 反馈。"
+    "1. 创建基础 HTML 结构并引入 Tailwind CSS 和 Vue 3。",
+    "2. 构建页面主容器，使用 Flexbox 居中。",
+    "3. 实现卡片组件结构，包括标题和内容区。",
+    "4. 添加交互组件：输入框和按钮。",
+    "5. 编写 Vue 逻辑处理用户交互。"
   ]
 };
 
-// This simulates the result of the "Coder" agent. 
-// We act as if we are writing a Vue file, but formatted as HTML for the iframe preview to work nicely in this React demo.
 export const MOCK_GENERATED_CODE = `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <style>
-    /* Simulating KPC Styles roughly for the preview */
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background: #f0f2f5; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-    .k-card { background: white; border-radius: 4px; box-shadow: 0 2px 12px 0 rgba(0,0,0,.1); width: 400px; padding: 24px; }
-    .k-card-header { font-size: 18px; font-weight: bold; margin-bottom: 24px; color: #333; text-align: center; }
-    .k-form-item { margin-bottom: 20px; }
-    .k-label { display: block; margin-bottom: 8px; font-size: 14px; color: #606266; }
-    .k-input { width: 100%; box-sizing: border-box; height: 40px; padding: 0 15px; border: 1px solid #dcdfe6; border-radius: 4px; outline: none; transition: border-color .2s; color: #606266; }
-    .k-input:focus { border-color: #2563eb; }
-    .k-btn { display: inline-block; line-height: 1; white-space: nowrap; cursor: pointer; background: #fff; border: 1px solid #dcdfe6; color: #606266; text-align: center; box-sizing: border-box; outline: none; margin: 0; font-weight: 500; padding: 12px 20px; font-size: 14px; border-radius: 4px; width: 100%; }
-    .k-btn-primary { color: #fff; background-color: #2563eb; border-color: #2563eb; }
-    .k-btn-primary:hover { background-color: #1d4ed8; border-color: #1d4ed8; }
-    .footer-links { margin-top: 16px; display: flex; justify-content: space-between; font-size: 12px; color: #909399; }
-    .footer-links a { color: #2563eb; text-decoration: none; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mock Generated Page</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
 </head>
-<body>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center">
+    <!-- [KPC:STEP:1] -->
+    <!-- [KPC:STEP:2] -->
+    <div id="app" class="w-full max-w-md p-4">
+        <!-- [KPC:STEP:3] -->
+        <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+            <div class="bg-blue-600 px-6 py-4">
+                <h1 class="text-xl font-bold text-white">示例页面</h1>
+                <p class="text-blue-100 text-sm mt-1">这是一个模拟生成的界面</p>
+            </div>
+            
+            <div class="p-6 space-y-6">
+                <!-- [KPC:STEP:4] -->
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-gray-700">请输入内容</label>
+                    <input 
+                        type="text" 
+                        v-model="inputText"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                        placeholder="在此输入..."
+                    >
+                </div>
 
-<div class="k-card">
-  <div class="k-card-header">
-    KPC 管理系统
-  </div>
-  <form id="loginForm">
-    <div class="k-form-item">
-      <label class="k-label">用户名</label>
-      <input type="text" class="k-input" placeholder="请输入用户名" value="admin">
-    </div>
-    <div class="k-form-item">
-      <label class="k-label">密码</label>
-      <input type="password" class="k-input" placeholder="请输入密码">
-    </div>
-    <div class="k-form-item">
-      <button type="button" class="k-btn k-btn-primary" onclick="alert('登录成功！')">登 录</button>
-    </div>
-  </form>
-  <div class="footer-links">
-    <a href="#">忘记密码？</a>
-    <a href="#">注册账号</a>
-  </div>
-</div>
+                <div class="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                    <p class="text-sm text-gray-600">当前输入：</p>
+                    <p class="text-lg font-medium text-gray-900 mt-1">{{ inputText || '暂无内容' }}</p>
+                </div>
 
+                <button 
+                    @click="handleClick"
+                    class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2"
+                >
+                    <span>确认提交</span>
+                </button>
+            </div>
+        </div>
+        
+        <p class="text-center text-gray-400 text-xs mt-6">
+            Generated by KPC AI Forge (Mock Mode)
+        </p>
+    </div>
+
+    <!-- [KPC:STEP:5] -->
+    <script>
+        const { createApp, ref } = Vue;
+
+        createApp({
+            setup() {
+                const inputText = ref('');
+
+                const handleClick = () => {
+                    alert('提交成功！内容：' + inputText.value);
+                };
+
+                return {
+                    inputText,
+                    handleClick
+                };
+            }
+        }).mount('#app');
+    </script>
 </body>
 </html>`;
+
+export const MOCK_USERS = [
+  {
+    id: 'user-alice',
+    name: 'Alice Designer',
+    role: 'UI/UX Expert',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Alice&backgroundColor=b6e3f4',
+    themeColor: 'blue'
+  },
+  {
+    id: 'user-bob',
+    name: 'Bob Developer',
+    role: 'Frontend Engineer',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Bob&backgroundColor=c0aede',
+    themeColor: 'emerald'
+  },
+  {
+    id: 'user-charlie',
+    name: 'Charlie PM',
+    role: 'Product Manager',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Charlie&backgroundColor=ffdfbf',
+    themeColor: 'purple'
+  }
+];

@@ -1,5 +1,5 @@
-import React from 'react';
-import { AppState, AgentType } from '../types';
+import React, { memo } from 'react';
+import { AppState } from '../types';
 import { BrainCircuit, Code2, PenTool, CheckCircle2 } from 'lucide-react';
 
 interface StepIndicatorProps {
@@ -55,4 +55,4 @@ const StepIndicator: React.FC<StepIndicatorProps> = ({ state }) => {
   );
 };
 
-export default StepIndicator;
+export default memo(StepIndicator);

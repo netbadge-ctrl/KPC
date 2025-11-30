@@ -1,101 +1,489 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Header from './components/Header';
 import ChatArea from './components/ChatArea';
 import Workspace from './components/Workspace';
 import StepIndicator from './components/StepIndicator';
-import { Message, Sender, AppState, AgentType, PlanData, GeneratedArtifact } from './types';
-// Change import from mock service to real AI service
-import { generatePlan, generateCode, refineCode } from './services/aiService';
-import { INITIAL_CODE } from './constants';
+import InputModal from './components/InputModal';
+import SettingsModal from './components/SettingsModal';
+import LoginScreen from './components/LoginScreen';
+import ShareModal from './components/ShareModal'; // New Import
+import { Message, Sender, AgentType, PlanData, GeneratedArtifact, Project, Page, AppSettings, User } from './types';
+import { generatePlan, generateRefinementPlan, generateCodeStream, refineCodeStream } from './services/aiService';
+import { INITIAL_CODE, MOCK_USERS } from './constants';
 
-const App: React.FC = () => {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: 'init-1',
-      sender: Sender.SYSTEM,
-      text: "欢迎来到 KPC AI Forge。我是您的前端架构师。请描述您想用 KPC 组件构建的界面。",
-      timestamp: Date.now(),
-      agent: AgentType.NONE
-    }
-  ]);
-  const [appState, setAppState] = useState<AppState>('idle');
-  const [currentPlan, setCurrentPlan] = useState<PlanData | null>(null);
-  const [generatedArtifact, setGeneratedArtifact] = useState<GeneratedArtifact>({
+const createInitialPage = (id: string, name: string): Page => {
+  const initialArtifact: GeneratedArtifact = {
     code: INITIAL_CODE,
     language: 'html',
-    version: 0
+    version: 0,
+    timestamp: Date.now(),
+    commitMessage: '初始化'
+  };
+  
+  return {
+    id,
+    name,
+    messages: [
+      {
+        id: `init-${id}`,
+        sender: Sender.SYSTEM,
+        text: `欢迎来到页面 "${name}"。请描述您想在此页面构建的功能。`,
+        timestamp: Date.now(),
+        agent: AgentType.FORGER,
+        relatedVersion: 0 // Allow restoring to init state
+      }
+    ],
+    appState: 'idle',
+    currentPlan: null,
+    generatedArtifact: initialArtifact,
+    history: [initialArtifact]
+  };
+};
+
+// Seed Projects for Mock Users
+const SEED_PROJECTS: Project[] = [
+    {
+        id: 'proj-alice-1',
+        ownerId: 'user-alice',
+        name: '电商控制台',
+        pages: [createInitialPage('p-a1-1', '数据概览'), createInitialPage('p-a1-2', '订单管理')]
+    },
+    {
+        id: 'proj-alice-2',
+        ownerId: 'user-alice',
+        name: '移动端商城',
+        pages: [createInitialPage('p-a2-1', '首页'), createInitialPage('p-a2-2', '购物车')]
+    },
+    {
+        id: 'proj-bob-1',
+        ownerId: 'user-bob',
+        name: '内部工具库',
+        pages: [createInitialPage('p-b1-1', '文档生成器')]
+    }
+];
+
+const DEFAULT_SETTINGS: AppSettings = {
+    model: 'gemini-3-pro-preview', 
+    planningTemperature: 0.8,
+    codingTemperature: 0.2,
+    github: { token: '', owner: '', repo: '', branch: 'main' },
+    submitShortcut: 'enter'
+};
+
+const App: React.FC = () => {
+  // --- Auth State ---
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+
+  // --- Data State (Simulated Database) ---
+  const [allProjects, setAllProjects] = useState<Project[]>(SEED_PROJECTS);
+  
+  // Settings Store: Map<userId, AppSettings>
+  const [userSettingsMap, setUserSettingsMap] = useState<Record<string, AppSettings>>({
+      'user-alice': { ...DEFAULT_SETTINGS, model: 'gemini-3-pro-preview' }, // Alice likes Pro
+      'user-bob': { ...DEFAULT_SETTINGS, model: 'gemini-2.5-flash', codingTemperature: 0.0 } // Bob likes fast & strict
   });
 
-  const addMessage = (text: string, sender: Sender, agent: AgentType = AgentType.NONE) => {
-    setMessages(prev => [...prev, {
-      id: Date.now().toString(),
-      text,
-      sender,
-      agent,
-      timestamp: Date.now()
-    }]);
+  // --- Active View State ---
+  const [activeProjectId, setActiveProjectId] = useState<string>('');
+  const [activePageId, setActivePageId] = useState<string>('');
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isShareOpen, setIsShareOpen] = useState(false); // New State
+  
+  // --- Refs & Modals ---
+  const [modalConfig, setModalConfig] = useState<{
+    isOpen: boolean;
+    type: 'create-project' | 'create-page' | 'rename-project' | 'rename-page' | null;
+    title: string;
+    defaultValue: string;
+    targetId?: string;
+  }>({ isOpen: false, type: null, title: '', defaultValue: '' });
+
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  // --- Derived State ---
+  
+  // Filter projects for the current user
+  const userProjects = useMemo(() => {
+      if (!currentUser) return [];
+      return allProjects.filter(p => p.ownerId === currentUser.id);
+  }, [allProjects, currentUser]);
+
+  const activeProject = useMemo(() => 
+    userProjects.find(p => p.id === activeProjectId) || userProjects[0],
+  [userProjects, activeProjectId]);
+
+  const activePage = useMemo(() => 
+    activeProject?.pages.find(p => p.id === activePageId) || activeProject?.pages[0],
+  [activeProject, activePageId]);
+
+  // Current User Settings
+  const appSettings = useMemo(() => {
+      if (!currentUser) return DEFAULT_SETTINGS;
+      return userSettingsMap[currentUser.id] || DEFAULT_SETTINGS;
+  }, [currentUser, userSettingsMap]);
+
+  // --- Auth Handlers ---
+
+  const handleLogin = (user: User) => {
+      setCurrentUser(user);
+      
+      // Ensure user has at least one project
+      const myProjects = allProjects.filter(p => p.ownerId === user.id);
+      if (myProjects.length === 0) {
+           const newProjId = `proj-${Date.now()}`;
+           const newPageId = `page-${Date.now()}`;
+           const newProject: Project = {
+              id: newProjId,
+              ownerId: user.id,
+              name: '我的第一个项目',
+              pages: [createInitialPage(newPageId, '首页')]
+           };
+           setAllProjects(prev => [...prev, newProject]);
+           setActiveProjectId(newProjId);
+           setActivePageId(newPageId);
+      } else {
+          setActiveProjectId(myProjects[0].id);
+          setActivePageId(myProjects[0].pages[0].id);
+      }
   };
 
-  const handleSendMessage = async (text: string) => {
-    // 1. User Message
-    addMessage(text, Sender.USER);
+  const handleLogout = () => {
+      setCurrentUser(null);
+      setActiveProjectId('');
+      setActivePageId('');
+  };
+
+  const handleSettingsChange = (newSettings: AppSettings) => {
+      if (!currentUser) return;
+      setUserSettingsMap(prev => ({
+          ...prev,
+          [currentUser.id]: newSettings
+      }));
+  };
+
+  // --- Sync Selection Validity ---
+  useEffect(() => {
+    if (!currentUser || userProjects.length === 0) return;
+
+    const proj = userProjects.find(p => p.id === activeProjectId);
+    if (!proj) {
+      setActiveProjectId(userProjects[0].id);
+      setActivePageId(userProjects[0].pages[0].id);
+    } else {
+      const page = proj.pages.find(p => p.id === activePageId);
+      if (!page) {
+        setActivePageId(proj.pages[0].id);
+      }
+    }
+  }, [userProjects, activeProjectId, activePageId, currentUser]);
+
+
+  // --- Data Updaters ---
+
+  const setPageData = useCallback((projectId: string, pageId: string, updateFn: (page: Page) => Page) => {
+    setAllProjects(prevProjects => prevProjects.map(proj => {
+      if (proj.id !== projectId) return proj;
+      return {
+        ...proj,
+        pages: proj.pages.map(page => {
+          if (page.id !== pageId) return page;
+          return updateFn(page);
+        })
+      };
+    }));
+  }, []);
+
+  const updateActivePage = useCallback((updates: Partial<Page>) => {
+    if(activeProjectId && activePageId) {
+        setPageData(activeProjectId, activePageId, (page) => ({ ...page, ...updates }));
+    }
+  }, [activeProjectId, activePageId, setPageData]);
+
+  const addMessageToActivePage = useCallback((text: string, sender: Sender, agent: AgentType = AgentType.FORGER, image?: string, contentData?: PlanData, relatedVersion?: number) => {
+    const newMessage: Message = {
+        id: Date.now().toString(),
+        text,
+        sender,
+        agent,
+        image,
+        timestamp: Date.now(),
+        contentData,
+        relatedVersion
+    };
+    if(activeProjectId && activePageId) {
+        setPageData(activeProjectId, activePageId, (page) => ({
+            ...page,
+            messages: [...page.messages, newMessage]
+        }));
+    }
+  }, [activeProjectId, activePageId, setPageData]);
+
+
+  // --- Event Handlers (Memoized) ---
+
+  const handleModalSubmit = useCallback((name: string) => {
+    if (!currentUser) return;
+    const timestamp = Date.now();
+    switch (modalConfig.type) {
+        case 'create-project': {
+            const newProjectId = `proj-${timestamp}`;
+            const newPageId = `page-${timestamp}`;
+            const newProject: Project = {
+                id: newProjectId,
+                ownerId: currentUser.id,
+                name,
+                pages: [createInitialPage(newPageId, '首页')]
+            };
+            setAllProjects(prev => [...prev, newProject]);
+            setActiveProjectId(newProjectId);
+            setActivePageId(newPageId);
+            break;
+        }
+        case 'create-page': {
+            const newPageId = `page-${timestamp}`;
+            const newPage = createInitialPage(newPageId, name);
+            setAllProjects(prev => prev.map(p => 
+                p.id === activeProjectId ? { ...p, pages: [...p.pages, newPage] } : p
+            ));
+            setActivePageId(newPageId);
+            break;
+        }
+        case 'rename-project': {
+            setAllProjects(prev => prev.map(p => 
+                p.id === modalConfig.targetId ? { ...p, name } : p
+            ));
+            break;
+        }
+        case 'rename-page': {
+            if (modalConfig.targetId) {
+                setPageData(activeProjectId, modalConfig.targetId, (page) => ({ ...page, name }));
+            }
+            break;
+        }
+    }
+  }, [modalConfig, activeProjectId, currentUser, setPageData]);
+
+  const modalActions = useMemo(() => ({
+      openCreateProject: () => setModalConfig({ isOpen: true, type: 'create-project', title: '创建新项目', defaultValue: `新项目 ${userProjects.length + 1}` }),
+      openCreatePage: () => setModalConfig({ isOpen: true, type: 'create-page', title: '创建新页面', defaultValue: `新页面 ${activeProject?.pages.length + 1}` }),
+      openRenameProject: () => setModalConfig({ isOpen: true, type: 'rename-project', title: '重命名项目', defaultValue: activeProject?.name || '', targetId: activeProjectId }),
+      openRenamePage: () => setModalConfig({ isOpen: true, type: 'rename-page', title: '重命名页面', defaultValue: activePage?.name || '', targetId: activePageId }),
+      close: () => setModalConfig(prev => ({ ...prev, isOpen: false }))
+  }), [userProjects.length, activeProject, activePage, activeProjectId, activePageId]);
+
+  const handleRestoreVersion = useCallback((versionArtifact: GeneratedArtifact) => {
+      updateActivePage({ generatedArtifact: versionArtifact });
+  }, [updateActivePage]);
+
+  const restoreVersionFromChat = useCallback((version: number) => {
+      if (!activePage) return;
+      const artifact = activePage.history.find(h => h.version === version);
+      if (artifact) {
+          handleRestoreVersion(artifact);
+      }
+  }, [activePage, handleRestoreVersion]);
+
+  // --- AI Logic ---
+  const handleStopGeneration = useCallback(() => {
+      if (abortControllerRef.current) {
+          abortControllerRef.current.abort();
+          abortControllerRef.current = null;
+          addMessageToActivePage("用户已终止生成。", Sender.SYSTEM);
+          updateActivePage({ appState: 'ready' });
+      }
+  }, [addMessageToActivePage, updateActivePage]);
+
+  const handleSendMessage = useCallback(async (text: string, image?: string) => {
+    if (!activePage) return;
+
+    if (abortControllerRef.current) abortControllerRef.current.abort();
+    abortControllerRef.current = new AbortController();
+    const signal = abortControllerRef.current.signal;
+
+    addMessageToActivePage(text, Sender.USER, AgentType.FORGER, image);
     
     try {
-      if (appState === 'ready') {
-          // Refinement Mode
-          setAppState('refining');
-          const newCode = await refineCode(generatedArtifact.code, text);
-          setGeneratedArtifact(prev => ({...prev, code: newCode, version: prev.version + 1}));
-          addMessage(`我已根据您的要求更新了代码。`, Sender.AI, AgentType.REFINER);
-          setAppState('ready');
-          return;
+      const currentArtifact = activePage.generatedArtifact;
+      const isRefinement = currentArtifact.version > 0 || currentArtifact.code.length > 200;
+
+      updateActivePage({ appState: 'planning' });
+      if (signal.aborted) return;
+
+      let currentPlan: PlanData;
+      if (isRefinement) {
+         currentPlan = await generateRefinementPlan(currentArtifact.code, text, appSettings);
+         if (signal.aborted) return;
+         addMessageToActivePage(`我已分析了您的修改需求，以下是更新计划。`, Sender.AI, AgentType.PLANNER, undefined, currentPlan);
+      } else {
+         currentPlan = await generatePlan(text, image, appSettings);
+         if (signal.aborted) return;
+         addMessageToActivePage(`我已制定了详细的构建计划。`, Sender.AI, AgentType.PLANNER, undefined, currentPlan);
       }
+      
+      updateActivePage({ currentPlan });
+      if (signal.aborted) return;
 
-      // 2. Planner Step
-      setAppState('planning');
-      const plan = await generatePlan(text);
-      setCurrentPlan(plan);
-      addMessage(`我已制定了构建计划。\n\n思考过程：${plan.thought_process}\n策略：${plan.layout_strategy}`, Sender.AI, AgentType.PLANNER);
+      updateActivePage({ appState: isRefinement ? 'refining' : 'coding' });
+      
+      const maxVersion = activePage.history.length > 0 ? Math.max(...activePage.history.map(h => h.version)) : 0;
+      const nextVersion = maxVersion + 1;
 
-      // 3. Coder Step
-      setAppState('coding');
-      const code = await generateCode(plan);
-      setGeneratedArtifact({
-          code: code,
+      let finalCode = "";
+      let success = false;
+      let retryCount = 0;
+      const MAX_RETRIES = 3;
+
+      while (retryCount < MAX_RETRIES && !success) {
+          if (signal.aborted) return;
+          try {
+              const streamGenerator = isRefinement 
+                  ? refineCodeStream(currentArtifact.code, text, appSettings)
+                  : generateCodeStream(currentPlan, image, appSettings);
+
+              for await (const chunk of streamGenerator) {
+                  if (signal.aborted) return;
+                  finalCode = chunk;
+                  setPageData(activeProjectId, activePageId, (p) => ({
+                      ...p,
+                      generatedArtifact: {
+                          ...p.generatedArtifact,
+                          code: chunk,
+                          version: nextVersion
+                      }
+                  }));
+              }
+              success = true;
+          } catch (error) {
+              if (signal.aborted) return;
+              retryCount++;
+              console.warn(`Attempt ${retryCount} failed:`, error);
+              if (retryCount >= MAX_RETRIES) throw error;
+              addMessageToActivePage(`检测到生成中断 (尝试 ${retryCount}/${MAX_RETRIES})，正在执行自动修复...`, Sender.AI, AgentType.FIXER);
+          }
+      }
+      
+      if (signal.aborted) return;
+
+      const newArtifact: GeneratedArtifact = {
+          code: finalCode,
           language: 'html',
-          version: 1
-      });
-      addMessage("代码生成完毕。您可以在预览标签页查看结果。", Sender.AI, AgentType.CODER);
+          version: nextVersion,
+          timestamp: Date.now(),
+          commitMessage: isRefinement ? '代码优化与更新' : '初始代码生成'
+      };
 
-      setAppState('ready');
+      setPageData(activeProjectId, activePageId, (p) => ({
+          ...p,
+          appState: 'ready',
+          generatedArtifact: newArtifact,
+          history: [...p.history, newArtifact]
+      }));
+      
+      addMessageToActivePage(
+          isRefinement ? `更新完成 (v${nextVersion})。` : `生成完成 (v${nextVersion})。`, 
+          Sender.AI, 
+          isRefinement ? AgentType.REFINER : AgentType.CODER,
+          undefined,
+          undefined,
+          nextVersion // Pass version for restore capability
+      );
+
     } catch (error) {
+      if (signal.aborted) return;
       console.error("Process failed:", error);
-      addMessage("抱歉，AI 服务遇到了一些问题，请稍后重试。", Sender.SYSTEM);
-      setAppState('idle');
+      addMessageToActivePage("抱歉，AI 服务连接不稳定。请稍后重试。", Sender.SYSTEM);
+      updateActivePage({ appState: 'idle' });
+    } finally {
+        if (abortControllerRef.current?.signal === signal) {
+            abortControllerRef.current = null;
+        }
     }
-  };
+  }, [activePage, activeProjectId, activePageId, appSettings, addMessageToActivePage, updateActivePage, setPageData]);
+
+
+  // --- Render ---
+
+  if (!currentUser) {
+      return <LoginScreen users={MOCK_USERS} onLogin={handleLogin} />;
+  }
+
+  // If logged in but no active page (loading state or empty project), handle gracefully
+  if (!activePage) {
+      return <div className="h-screen w-screen flex items-center justify-center bg-[#0F172A] text-slate-400">Loading Project...</div>;
+  }
 
   return (
     <div className="h-screen w-screen flex flex-col bg-[#0F172A] text-slate-200 font-sans overflow-hidden">
-      <Header />
+      <Header 
+        projects={userProjects}
+        activeProjectId={activeProjectId}
+        activePageId={activePageId}
+        currentUser={currentUser}
+        onSelectProject={setActiveProjectId}
+        onSelectPage={setActivePageId}
+        onCreateProject={modalActions.openCreateProject}
+        onCreatePage={modalActions.openCreatePage}
+        onRenameProject={modalActions.openRenameProject}
+        onRenamePage={modalActions.openRenamePage}
+        onOpenSettings={() => setIsSettingsOpen(true)}
+        onLogout={handleLogout}
+        onShare={() => setIsShareOpen(true)}
+      />
       
-      <StepIndicator state={appState} />
+      <StepIndicator state={activePage.appState} />
 
       <main className="flex-1 flex overflow-hidden">
-        {/* Left Panel: Chat & Prompt */}
+        {/* Left Panel: Chat */}
         <div className="w-[400px] shrink-0 h-full flex flex-col z-20 shadow-xl shadow-black/20">
           <ChatArea 
-            messages={messages} 
+            messages={activePage.messages} 
             onSendMessage={handleSendMessage} 
-            appState={appState}
+            onStop={handleStopGeneration}
+            appState={activePage.appState}
+            submitShortcut={appSettings.submitShortcut}
+            currentVersion={activePage.generatedArtifact.version}
+            onRestoreVersion={restoreVersionFromChat}
           />
         </div>
 
-        {/* Right Panel: Workspace (Plan, Code, Preview) */}
+        {/* Right Panel: Workspace */}
         <div className="flex-1 h-full overflow-hidden bg-[#1E293B]">
-           <Workspace plan={currentPlan} generatedArtifact={generatedArtifact} />
+           <Workspace 
+            plan={activePage.currentPlan} 
+            generatedArtifact={activePage.generatedArtifact}
+            history={activePage.history}
+            onRestoreVersion={handleRestoreVersion}
+            appState={activePage.appState}
+           />
         </div>
       </main>
+
+      <InputModal 
+        isOpen={modalConfig.isOpen}
+        title={modalConfig.title}
+        initialValue={modalConfig.defaultValue}
+        onClose={modalActions.close}
+        onSubmit={handleModalSubmit}
+      />
+
+      <SettingsModal 
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        settings={appSettings}
+        onSettingsChange={handleSettingsChange}
+        currentArtifact={activePage.generatedArtifact}
+      />
+
+      {/* Share Modal Integration */}
+      {activePage && (
+          <ShareModal 
+            isOpen={isShareOpen}
+            onClose={() => setIsShareOpen(false)}
+            artifact={activePage.generatedArtifact}
+            projectName={activeProject.name}
+            pageName={activePage.name}
+          />
+      )}
     </div>
   );
 };
