@@ -7,16 +7,98 @@ const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 // Constants
 const DEFAULT_MODEL = 'gemini-3-pro-preview';
 
+// Fallback Static Context
+const STATIC_KPC_CONTEXT = `
+KPC 组件库规范 (@king-design/vue):
+
+1. 安装方式 (参考):
+   - npm install @king-design/vue -S
+   - 用法: app.use(KPC)
+
+2. 核心组件 (前缀: k-):
+   - Button 按钮: <k-button type="primary|secondary|danger|..." size="small|default">文本</k-button>
+   - Card 卡片: <k-card title="...">内容...</k-card>
+   - Cascader 级联选择: <k-cascader v-model="..." :data="..." />
+   - 以及其他标准的 UI 组件。
+
+3. 视觉风格:
+   - 主色调 (Primary): #2563EB (蓝色 600)
+   - 圆角 (Border Radius): 通常使用 rounded-lg
+`;
+
+// Helper: Vector DB Retrieval
+// Expects a standard POST request returning { documents: string[] } or similar.
+// Adapters can be added here for specific vendors (Pinecone, Milvus, etc.)
+const retrieveContext = async (query: string, settings?: AppSettings): Promise<string> => {
+    if (!settings?.vectorDb?.enabled || !settings.vectorDb.endpoint) {
+        console.log("Vector DB disabled or missing endpoint, using static context.");
+        return STATIC_KPC_CONTEXT;
+    }
+
+    try {
+        console.log(`Retrieving context from ${settings.vectorDb.endpoint} for query: "${query}"`);
+        
+        // Generic RAG Payload
+        const payload = {
+            query: query,
+            collection_name: settings.vectorDb.collection,
+            top_k: settings.vectorDb.topK || 3
+        };
+
+        const response = await fetch(settings.vectorDb.endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${settings.vectorDb.apiKey}`
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            throw new Error(`Vector DB API responded with ${response.status}`);
+        }
+
+        const data = await response.json();
+        
+        // Flexible parsing strategies for common RAG response formats
+        let docs: string[] = [];
+        if (Array.isArray(data.documents)) {
+            docs = data.documents; // Simple array of strings
+        } else if (Array.isArray(data.results)) {
+             docs = data.results.map((r: any) => r.text || r.page_content || JSON.stringify(r)); // Common vector result wrappers
+        } else if (data.text) {
+            docs = [data.text];
+        }
+
+        if (docs.length > 0) {
+            const dynamicContext = `
+[检索增强系统 (RAG) 已激活]
+以下是从云端知识库检索到的 KPC 组件最新文档，请**优先**依据此文档编写代码：
+---
+${docs.join('\n\n')}
+---
+`;
+            return dynamicContext;
+        }
+
+        return STATIC_KPC_CONTEXT;
+
+    } catch (error) {
+        console.warn("Vector DB Retrieval Failed, falling back to static context:", error);
+        return STATIC_KPC_CONTEXT;
+    }
+};
+
 // Instructions
 const PLANNER_INSTRUCTION = `
 你是一个名为 "KPC AI Forge" 的首席前端架构师。
-你的任务是分析用户的需求（可能是自然语言，也可能包含一张设计图/截图），并为 KPC 组件库设计开发计划。
+你的任务是分析用户的需求（可能是自然语言，也可能包含一张设计图/截图），并为基于 @king-design/vue 的项目设计开发计划。
 
 核心规则：
 1. **视觉还原优先**：如果用户提供了图片，必须仔细分析图片中的**布局结构、配色方案（提取十六进制代码）、字体大小关系、间距**。
-2. **内容提取与语言**：如果图片中有文字，必须在 thought_process 中提及。**如果用户没有提供具体文案，必须默认为组件设计合理的中文文案（Chinese）**，不要使用 Lorem Ipsum 或英文（除非用户明确要求）。
-3. **KPC 组件映射**：将视觉元素准确映射到 KPC 组件（如 KPC/Card, KPC/Button, KPC/Input）。
-4. **Tailwind 布局**：在 layout_strategy 中明确 Flexbox/Grid 的具体用法（例如：'使用 flex-col 垂直居中，gap-4 控制间距'）。
+2. **KPC 组件映射**：优先使用提供的 KPC 组件上下文。
+3. **内容提取与语言**：如果图片中有文字，必须在 thought_process 中提及。**如果用户没有提供具体文案，必须默认为组件设计合理的中文文案（Chinese）**。
+4. **Tailwind 布局**：在 layout_strategy 中明确 Flexbox/Grid 的具体用法。
 
 输出要求：
 1. 必须使用中文回复。
@@ -34,33 +116,38 @@ const REFINEMENT_INSTRUCTION = `
 
 const CODER_INSTRUCTION = `
 你是一个资深前端工程师，擅长 Pixel-Perfect（像素级还原）的 UI 开发。
-你的任务是根据设计计划（以及可能提供的参考截图）生成 Vue 3 + Tailwind CSS 代码。
+你的任务是根据设计计划生成 Vue 3 + Tailwind CSS 代码。
+用户希望使用 NPM 包的方式引入组件库 (\`npm install @king-design/vue\`)。
 
 核心要求：
-1. **进度追踪（非常重要）**：
-   - 你**必须**严格按照 plan.implementation_steps 的顺序编写代码。
-   - **每当你开始实现第 n 个步骤时**，请在代码合适的位置（通常是相关 HTML 结构之前或 <script> 逻辑之前）插入一行注释标记：\`<!-- [KPC:STEP:n] -->\` (n 为 1, 2, 3...)。
-   - 前端系统会解析这个标记来向用户展示进度打勾。请务必包含这些注释！
+1. **模拟 NPM 库架构 (Crucial)**：
+   - 由于这是单文件预览环境，不能真的运行 npm install。
+   - **必须**在 <script> 中创建一个名为 \`KingDesignVue\` 的全局对象来**模拟**这个库。
+   - 这个对象必须包含 mock 组件定义 (使用 Tailwind 模拟样式) 和一个 \`install\` 方法 (Vue Plugin 格式)。
+   - 在主逻辑中，使用 \`const { Button, Card } = KingDesignVue;\` 来模拟解构引入。
+   - 使用 \`app.use(KingDesignVue);\` 来模拟插件安装。
 
-2. **语言要求（默认中文）**：
-   - **除非用户明确指定了其他语言（如“生成英文版”），否则页面中的所有可见文本（标题 H1、段落 P、按钮 Button、输入框 Placeholder、提示信息 Alert 等）必须强制使用中文。**
-   - 不要生成 "Lorem Ipsum"，请根据场景生成逼真的**中文模拟数据**（例如：用户名使用“张三”，地址使用“北京市...”）。
+2. **组件实现细节**：
+   - 必须使用 \`k-\` 前缀 (如 <k-button>, <k-card>)，这是 KPC 的标准。
+   - 组件实现应使用 Tailwind CSS 模拟 KPC 的视觉风格 (Primary Blue: #2563EB)。
+   - **参考上下文文档**：如果提供了具体的 Props 或 Events 文档，请严格遵守。
+   - **交互性**：组件应当是可交互的 (Button hover 效果, Input v-model 支持等)。
 
-3. **参考图绝对优先**：如果提供了参考图，请忽略通用的设计规范，**全力复刻图中的每一个细节**（圆角大小、阴影深度、文字颜色、元素间距）。使用 Tailwind 的任意值语法（如 text-[#333] w-[320px] shadow-[0_4px_12px_rgba(0,0,0,0.1)]）来达到 1:1 还原。
-4. **技术栈**：HTML5 单文件, Vue 3 (CDN), Tailwind CSS (CDN)。
-5. **样式实现**：
-   - 虽然我们使用 "KPC" 组件名义，但你需要**手动实现**这些组件的样式，使其看起来像截图中的样子。
-   - 在 <style> 标签中编写必要的自定义 CSS，覆盖默认样式以匹配截图。
-   - 按钮、输入框的 padding、border-radius 必须精确。
-6. **完整性**：输出完整的 HTML 代码，包含 <html>, <head>, <body>。不要省略代码。
-7. **交互**：为按钮添加简单的 click 交互（如 alert），表单添加 submit 阻止默认行为。
+3. **进度追踪**：
+   - 严格按照 plan.implementation_steps 顺序编写代码。
+   - 在每个步骤代码前插入注释标记：\`<!-- [KPC:STEP:n] -->\`。
+
+4. **代码结构**：
+   - 输出完整的 HTML (<!DOCTYPE html>...</html>)。
+   - 引入 Vue 3 Global CDN 和 Tailwind CDN。
+   - 结构顺序：Mock Library Script -> Main App Script -> HTML Body。
 
 输出格式：纯 HTML 代码，无 Markdown 标记。
 `;
 
 const REFINER_INSTRUCTION = `
 你是一个代码维护专家。根据用户修改意见调整代码。
-保持 Vue + Tailwind + KPC CSS 结构。
+保持 Vue + Tailwind + KPC (Plugin Pattern) 结构。
 只输出修改后的完整 HTML 代码，无 Markdown 标记。
 `;
 
@@ -99,7 +186,13 @@ const buildContents = (text: string, imageBase64?: string) => {
 
 export const generatePlan = async (prompt: string, imageBase64?: string, settings?: AppSettings): Promise<PlanData> => {
   try {
-    const contents = buildContents(prompt || "请分析这张图片并生成前端开发计划。", imageBase64);
+    // RAG Step: Retrieve relevant KPC docs based on user prompt
+    const kpcContext = await retrieveContext(prompt, settings);
+    
+    // Inject retrieved context into the prompt for the Planner
+    const augmentedPrompt = `${prompt}\n\n参考文档/知识库:\n${kpcContext}`;
+    
+    const contents = buildContents(augmentedPrompt, imageBase64);
 
     const response = await ai.models.generateContent({
       model: settings?.model || DEFAULT_MODEL,
@@ -190,11 +283,16 @@ async function* streamHelper(systemInstruction: string, contents: any[], setting
     }
 }
 
-export const generateCodeStream = (plan: PlanData, imageBase64?: string, settings?: AppSettings) => {
-    // We pass the plan as text, and attach the image if available so the Coder can see it too.
-    const promptText = `请严格根据以下设计计划生成代码，如果附带了图片，请务必 Pixel-Perfect 级还原图片中的所有细节（文字、颜色、间距、圆角）：\n${JSON.stringify(plan)}`;
+export const generateCodeStream = async function* (plan: PlanData, imageBase64?: string, settings?: AppSettings) {
+    // RAG Step: Retrieve context specifically for the required components
+    // Use component list as query to get specific API docs
+    const query = `KPC 组件文档: ${plan.component_list.join(', ')} 的详细API定义和示例`;
+    const kpcContext = await retrieveContext(query, settings);
+
+    const promptText = `请严格根据以下设计计划生成代码，如果附带了图片，请务必 Pixel-Perfect 级还原图片中的所有细节（文字、颜色、间距、圆角）：\n${JSON.stringify(plan)}\n\nKPC Library Docs (@king-design/vue):\n${kpcContext}`;
     const contents = buildContents(promptText, imageBase64);
-    return streamHelper(CODER_INSTRUCTION, contents, settings);
+    
+    yield* streamHelper(CODER_INSTRUCTION, contents, settings);
 }
 
 export const refineCodeStream = (currentCode: string, instruction: string, settings?: AppSettings) => {

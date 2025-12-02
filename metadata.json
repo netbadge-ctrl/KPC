@@ -1,5 +1,5 @@
 {
   "name": "KPC AI Forge",
-  "description": "An intelligent frontend generation platform leveraging Plan & Execute agents to build KPC-based interfaces.",
+  "description": "一个利用 Plan & Execute 智能代理构建 KPC 风格前端界面的生成平台。",
   "requestFramePermissions": []
 }

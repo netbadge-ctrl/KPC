@@ -12,7 +12,7 @@ const PlanViewer: React.FC<PlanViewerProps> = ({ plan }) => {
       
       <div className="bg-blue-900/10 border border-blue-800/30 p-4 rounded-lg">
         <h3 className="text-blue-400 font-bold mb-2 flex items-center gap-2">
-            <BrainCircuit className="w-4 h-4" /> 思考过程 (Thought Process)
+            <BrainCircuit className="w-4 h-4" /> 思考过程
         </h3>
         <p className="text-sm italic leading-relaxed opacity-90">"{plan.thought_process}"</p>
       </div>

@@ -63,13 +63,9 @@ const EmptyState = () => (
                 </p>
             </div>
             <div className="flex gap-2 flex-wrap justify-center">
-                 <span className="px-3 py-1 bg-slate-800/50 border border-slate-700 rounded-full text-xs font-mono text-slate-400 flex items-center gap-1.5">
-                    <Zap size={12} className="text-yellow-400" />
-                    Vue 3
-                 </span>
-                 <span className="px-3 py-1 bg-slate-800/50 border border-slate-700 rounded-full text-xs font-mono text-slate-400 flex items-center gap-1.5">
-                    <Zap size={12} className="text-sky-400" />
-                    Tailwind CSS
+                 <span className="px-3 py-1 bg-blue-900/20 border border-blue-800/50 rounded-full text-xs font-mono text-blue-300 flex items-center gap-1.5 animate-in fade-in slide-in-from-top-2">
+                    <Box size={12} className="text-blue-500" />
+                    @king-design/vue
                  </span>
             </div>
         </div>
@@ -124,10 +120,10 @@ const BuildProgress = ({ plan, currentCode, isComplete }: { plan: PlanData, curr
             <div className="flex items-center justify-between px-3 py-2 bg-slate-800/80 border-b border-slate-700/50">
                 <div className="flex items-center gap-2">
                     <ListChecks size={14} className="text-blue-400" />
-                    <span className="text-xs font-semibold text-slate-200">构建任务 (Build Tasks)</span>
+                    <span className="text-xs font-semibold text-slate-200">构建任务详情</span>
                 </div>
                 {isComplete ? (
-                    <span className="text-[10px] text-green-400 font-mono font-bold">DONE</span>
+                    <span className="text-[10px] text-green-400 font-mono font-bold">完成</span>
                 ) : (
                     <Loader2 size={12} className="text-blue-400 animate-spin" />
                 )}
@@ -217,7 +213,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ plan, generatedArtifact, history 
           }`}
         >
           <Monitor className="w-4 h-4" />
-          预览 (Preview)
+          界面预览
         </button>
         <button
           onClick={() => setActiveTab('code')}
@@ -228,7 +224,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ plan, generatedArtifact, history 
           }`}
         >
           <Code className="w-4 h-4" />
-          代码 (Code)
+          生成的代码
         </button>
       </div>
 
@@ -270,7 +266,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ plan, generatedArtifact, history 
       {/* Footer Status */}
       <div className="h-8 bg-kpc-panel border-t border-kpc-border flex items-center px-4 text-[10px] text-slate-500 justify-between shrink-0 relative">
           <div className="flex gap-4 items-center">
-             <span>HTML/Vue</span>
+             <span>Vue 源代码</span>
              
              {/* Version Selector */}
              <div className="relative ml-2" ref={historyRef}>
@@ -286,7 +282,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ plan, generatedArtifact, history 
                 {showHistory && (
                     <div className="absolute bottom-full left-0 mb-2 w-64 bg-slate-800 border border-slate-700 rounded-lg shadow-xl overflow-hidden z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
                         <div className="px-3 py-2 border-b border-slate-700/50 bg-slate-900/50">
-                            <span className="text-xs font-semibold text-slate-300">版本历史 (History)</span>
+                            <span className="text-xs font-semibold text-slate-300">历史版本</span>
                         </div>
                         <div className="max-h-60 overflow-y-auto custom-scrollbar p-1">
                             {sortedHistory.map((h) => (
@@ -302,7 +298,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ plan, generatedArtifact, history 
                                     <div className="flex flex-col gap-0.5">
                                         <div className="flex items-center gap-2">
                                             <span className="font-mono font-bold">v{h.version}</span>
-                                            {h.version === 0 && <span className="text-[10px] opacity-60 bg-slate-700 px-1 rounded">Init</span>}
+                                            {h.version === 0 && <span className="text-[10px] opacity-60 bg-slate-700 px-1 rounded">初始</span>}
                                         </div>
                                         <span className="text-[10px] opacity-60 flex items-center gap-1">
                                             <Clock size={10} />

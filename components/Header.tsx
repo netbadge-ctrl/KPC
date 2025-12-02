@@ -138,7 +138,7 @@ const Header: React.FC<HeaderProps> = ({
           <GitBranch className="w-3.5 h-3.5" />
           <span>v1.2.0</span>
           <span className="text-slate-600">|</span>
-          <span className="text-green-500">System Ready</span>
+          <span className="text-green-500">系统就绪</span>
         </div>
         
         <button 
@@ -189,7 +189,7 @@ const Header: React.FC<HeaderProps> = ({
                     />
                     <div className="absolute right-0 top-full mt-2 w-48 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
                          <div className="px-4 py-3 border-b border-slate-700/50">
-                             <p className="text-xs text-slate-500 font-medium">Logged in as</p>
+                             <p className="text-xs text-slate-500 font-medium">当前登录</p>
                              <p className="text-sm font-bold text-white truncate">{currentUser?.name}</p>
                              <p className="text-xs text-slate-400 truncate">{currentUser?.role}</p>
                          </div>
@@ -201,7 +201,7 @@ const Header: React.FC<HeaderProps> = ({
                             className="w-full text-left px-4 py-2.5 text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-2 transition-colors"
                          >
                              <LogOut size={14} />
-                             <span>登出 (Logout)</span>
+                             <span>退出登录</span>
                          </button>
                     </div>
                 </>

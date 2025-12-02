@@ -67,6 +67,7 @@ const DEFAULT_SETTINGS: AppSettings = {
     planningTemperature: 0.8,
     codingTemperature: 0.2,
     github: { token: '', owner: '', repo: '', branch: 'main' },
+    vectorDb: { enabled: false, endpoint: '', apiKey: '', collection: 'kpc-docs-v3', topK: 3 },
     submitShortcut: 'enter'
 };
 
@@ -315,6 +316,7 @@ const App: React.FC = () => {
          if (signal.aborted) return;
          addMessageToActivePage(`我已分析了您的修改需求，以下是更新计划。`, Sender.AI, AgentType.PLANNER, undefined, currentPlan);
       } else {
+         // Pass AppSettings which now contains Vector DB config
          currentPlan = await generatePlan(text, image, appSettings);
          if (signal.aborted) return;
          addMessageToActivePage(`我已制定了详细的构建计划。`, Sender.AI, AgentType.PLANNER, undefined, currentPlan);
@@ -409,7 +411,7 @@ const App: React.FC = () => {
 
   // If logged in but no active page (loading state or empty project), handle gracefully
   if (!activePage) {
-      return <div className="h-screen w-screen flex items-center justify-center bg-[#0F172A] text-slate-400">Loading Project...</div>;
+      return <div className="h-screen w-screen flex items-center justify-center bg-[#0F172A] text-slate-400">正在加载项目...</div>;
   }
 
   return (

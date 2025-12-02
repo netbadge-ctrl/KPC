@@ -20,7 +20,7 @@ const PlanCard: React.FC<{ plan: PlanData }> = ({ plan }) => {
       <div className="px-4 py-3 border-b border-slate-700/60 bg-slate-900 flex items-center justify-between">
          <div className="flex items-center gap-2 text-blue-400 font-medium text-sm">
             <BrainCircuit size={16} />
-            <span>构建计划 (Execution Plan)</span>
+            <span>构建计划</span>
          </div>
          <button 
             onClick={() => setExpanded(!expanded)} 

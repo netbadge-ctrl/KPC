@@ -24,21 +24,21 @@ const StepIndicator: React.FC<StepIndicatorProps> = ({ state }) => {
       
       <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border ${getStatusColor('planning', state)}`}>
         <BrainCircuit className="w-4 h-4" />
-        <span>规划 (Planner)</span>
+        <span>需求规划</span>
       </div>
 
       <div className="w-8 h-[1px] bg-slate-700" />
 
       <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border ${getStatusColor('coding', state)}`}>
         <Code2 className="w-4 h-4" />
-        <span>编码 (Coder)</span>
+        <span>代码生成</span>
       </div>
 
       <div className="w-8 h-[1px] bg-slate-700" />
 
       <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border ${getStatusColor('refining', state)}`}>
         <PenTool className="w-4 h-4" />
-        <span>微调 (Refiner)</span>
+        <span>细节优化</span>
       </div>
 
       {state === 'ready' && (

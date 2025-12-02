@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Cpu, Thermometer, Download, Zap, Sparkles, Github, Keyboard, CornerDownLeft, Command, BrainCircuit, Code2 } from 'lucide-react';
+import { X, Cpu, Thermometer, Download, Zap, Sparkles, Github, Keyboard, CornerDownLeft, Command, BrainCircuit, Code2, Database, Key } from 'lucide-react';
 import { AppSettings, GeneratedArtifact, SubmitShortcut } from '../types';
 
 interface SettingsModalProps {
@@ -42,6 +42,16 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     });
   };
 
+  const handleVectorDbChange = (field: keyof typeof settings.vectorDb, value: any) => {
+    onSettingsChange({
+        ...settings,
+        vectorDb: {
+            ...settings.vectorDb,
+            [field]: value
+        }
+    });
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <div className="bg-[#1E293B] border border-slate-700 rounded-xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
@@ -49,7 +59,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-700/50 bg-[#0F172A]">
           <h3 className="text-white font-semibold text-lg flex items-center gap-2">
-            设置 (Settings)
+            系统设置
           </h3>
           <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors p-1 rounded-md hover:bg-slate-800">
             <X size={20} />
@@ -106,7 +116,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         <div className="flex justify-between items-center mb-2">
                             <label className="text-sm text-slate-300 font-medium flex items-center gap-2">
                                 <BrainCircuit size={14} className="text-blue-400" /> 
-                                规划创造性 (Planning Temp)
+                                规划创造性
                             </label>
                             <span className="text-xs text-blue-400 font-mono bg-blue-900/30 px-2 py-0.5 rounded">
                                 {settings.planningTemperature.toFixed(1)}
@@ -132,7 +142,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         <div className="flex justify-between items-center mb-2">
                             <label className="text-sm text-slate-300 font-medium flex items-center gap-2">
                                 <Code2 size={14} className="text-emerald-400" /> 
-                                编码严谨性 (Coding Temp)
+                                编码严谨性
                             </label>
                             <span className="text-xs text-emerald-400 font-mono bg-emerald-900/30 px-2 py-0.5 rounded">
                                 {settings.codingTemperature.toFixed(1)}
@@ -156,7 +166,88 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
              </div>
           </section>
-          
+
+          <hr className="border-slate-700/50" />
+            
+            {/* Knowledge Base Settings (Vector DB) */}
+            <section>
+                <div className="flex items-center justify-between mb-4">
+                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                        <Database size={14} /> 知识库对接 (RAG)
+                    </h4>
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs text-slate-400">{settings.vectorDb?.enabled ? '已启用' : '未启用'}</span>
+                        <button 
+                            onClick={() => handleVectorDbChange('enabled', !settings.vectorDb?.enabled)}
+                            className={`w-10 h-5 rounded-full relative transition-colors ${
+                                settings.vectorDb?.enabled ? 'bg-blue-600' : 'bg-slate-700'
+                            }`}
+                        >
+                            <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-transform ${
+                                settings.vectorDb?.enabled ? 'left-6' : 'left-1'
+                            }`} />
+                        </button>
+                    </div>
+                </div>
+
+                {settings.vectorDb?.enabled && (
+                    <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700/50 space-y-4 animate-in fade-in slide-in-from-top-2">
+                        <div className="text-xs text-yellow-500/80 bg-yellow-900/20 p-2 rounded border border-yellow-500/20 mb-2">
+                            系统将优先从向量库检索 KPC 组件文档，若检索失败将降级使用内置规则。
+                        </div>
+
+                        <div className="space-y-1">
+                            <label className="text-xs text-slate-400">向量库 API 地址 (Endpoint)</label>
+                            <input 
+                                type="text"
+                                placeholder="https://api.your-vector-db.com/query"
+                                value={settings.vectorDb?.endpoint || ''}
+                                onChange={(e) => handleVectorDbChange('endpoint', e.target.value)}
+                                className="w-full bg-slate-950 border border-slate-700 text-slate-200 text-sm rounded-md px-3 py-2 focus:outline-none focus:border-blue-500"
+                            />
+                        </div>
+                        
+                        <div className="space-y-1">
+                            <label className="text-xs text-slate-400">API Key / Token</label>
+                            <div className="relative">
+                                <Key size={14} className="absolute left-3 top-2.5 text-slate-500" />
+                                <input 
+                                    type="password"
+                                    placeholder="sk-..."
+                                    value={settings.vectorDb?.apiKey || ''}
+                                    onChange={(e) => handleVectorDbChange('apiKey', e.target.value)}
+                                    className="w-full bg-slate-950 border border-slate-700 text-slate-200 text-sm rounded-md pl-9 pr-3 py-2 focus:outline-none focus:border-blue-500"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                             <div className="space-y-1">
+                                <label className="text-xs text-slate-400">集合名称 (Collection)</label>
+                                <input 
+                                    type="text"
+                                    placeholder="kpc-docs-v3"
+                                    value={settings.vectorDb?.collection || ''}
+                                    onChange={(e) => handleVectorDbChange('collection', e.target.value)}
+                                    className="w-full bg-slate-950 border border-slate-700 text-slate-200 text-sm rounded-md px-3 py-2 focus:outline-none focus:border-blue-500"
+                                />
+                             </div>
+                              <div className="space-y-1">
+                                <label className="text-xs text-slate-400">Top K (召回数量)</label>
+                                <input 
+                                    type="number"
+                                    min="1"
+                                    max="10"
+                                    value={settings.vectorDb?.topK || 3}
+                                    onChange={(e) => handleVectorDbChange('topK', parseInt(e.target.value))}
+                                    className="w-full bg-slate-950 border border-slate-700 text-slate-200 text-sm rounded-md px-3 py-2 focus:outline-none focus:border-blue-500"
+                                />
+                             </div>
+                        </div>
+                    </div>
+                )}
+            </section>
+
           <hr className="border-slate-700/50" />
 
           {/* Interaction Settings */}
@@ -211,7 +302,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             </h4>
             <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700/50 space-y-4">
                 <div className="space-y-1">
-                    <label className="text-xs text-slate-400">Personal Access Token</label>
+                    <label className="text-xs text-slate-400">个人访问令牌</label>
                     <input 
                         type="password"
                         placeholder="ghp_xxxxxxxxxxxx"
@@ -222,7 +313,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
-                        <label className="text-xs text-slate-400">仓库 (Owner/Repo)</label>
+                        <label className="text-xs text-slate-400">仓库路径 (用户/仓库名)</label>
                         {/* Hidden consolidated field */}
                         <input 
                             type="text"
@@ -233,7 +324,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         <div className="flex gap-2">
                              <input 
                                 type="text" 
-                                placeholder="Owner" 
+                                placeholder="拥有者" 
                                 value={settings.github?.owner || ''}
                                 onChange={(e) => handleGithubChange('owner', e.target.value)}
                                 className="w-1/2 bg-slate-950 border border-slate-700 text-slate-200 text-sm rounded-md px-3 py-2 focus:outline-none focus:border-blue-500"
@@ -241,7 +332,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                              <span className="text-slate-500 self-center">/</span>
                              <input 
                                 type="text" 
-                                placeholder="Repo" 
+                                placeholder="仓库名" 
                                 value={settings.github?.repo || ''}
                                 onChange={(e) => handleGithubChange('repo', e.target.value)}
                                 className="w-1/2 bg-slate-950 border border-slate-700 text-slate-200 text-sm rounded-md px-3 py-2 focus:outline-none focus:border-blue-500"
@@ -250,7 +341,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     </div>
                 </div>
                 <div className="space-y-1">
-                    <label className="text-xs text-slate-400">分支 (Branch)</label>
+                    <label className="text-xs text-slate-400">目标分支</label>
                     <input 
                         type="text"
                         placeholder="main"

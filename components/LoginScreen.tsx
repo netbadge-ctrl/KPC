@@ -62,7 +62,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLogin }) => {
 
         <div className="text-slate-600 text-xs flex items-center gap-2 mt-8">
             <UserIcon size={12} />
-            <span>模拟账户体系 (Mock Auth System)</span>
+            <span>模拟账户系统</span>
         </div>
 
       </div>

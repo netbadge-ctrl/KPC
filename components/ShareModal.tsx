@@ -76,7 +76,7 @@ const ShareModal: React.FC<ShareModalProps> = ({
         <div className="p-6 space-y-6">
             
             <div className="space-y-1">
-                <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Project</p>
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">所属项目</p>
                 <p className="text-base text-slate-200 font-medium">{projectName} / {pageName}</p>
             </div>
 

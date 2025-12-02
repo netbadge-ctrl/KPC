@@ -73,6 +73,14 @@ export interface GitHubConfig {
   branch: string;
 }
 
+export interface VectorDBConfig {
+  enabled: boolean;
+  endpoint: string; // e.g. https://api.your-cloud.com/v1/retrieve
+  apiKey: string;
+  collection: string; // Optional collection name
+  topK: number;
+}
+
 export type SubmitShortcut = 'enter' | 'ctrl_enter';
 
 export interface AppSettings {
@@ -80,5 +88,6 @@ export interface AppSettings {
   planningTemperature: number;
   codingTemperature: number;
   github: GitHubConfig;
+  vectorDb: VectorDBConfig;
   submitShortcut: SubmitShortcut;
 }
