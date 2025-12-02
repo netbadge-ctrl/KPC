@@ -6,9 +6,15 @@ import StepIndicator from './components/StepIndicator';
 import InputModal from './components/InputModal';
 import SettingsModal from './components/SettingsModal';
 import LoginScreen from './components/LoginScreen';
-import ShareModal from './components/ShareModal'; // New Import
-import { Message, Sender, AgentType, PlanData, GeneratedArtifact, Project, Page, AppSettings, User } from './types';
-import { generatePlan, generateRefinementPlan, generateCodeStream, refineCodeStream } from './services/aiService';
+import ShareModal from './components/ShareModal';
+import { Message, Sender, AgentType, PlanData, GeneratedArtifact, Project, Page, AppSettings, User, ArchitectPlan } from './types';
+import { 
+    generateArchitectPlan, 
+    generateComponentCode, 
+    generateAssemblyStream,
+    generateRefinementPlan, 
+    refineCodeStream 
+} from './services/aiService';
 import { INITIAL_CODE, MOCK_USERS } from './constants';
 
 const createInitialPage = (id: string, name: string): Page => {
@@ -200,7 +206,7 @@ const App: React.FC = () => {
     }
   }, [activeProjectId, activePageId, setPageData]);
 
-  const addMessageToActivePage = useCallback((text: string, sender: Sender, agent: AgentType = AgentType.FORGER, image?: string, contentData?: PlanData, relatedVersion?: number) => {
+  const addMessageToActivePage = useCallback((text: string, sender: Sender, agent: AgentType = AgentType.FORGER, image?: string, contentData?: PlanData | ArchitectPlan, relatedVersion?: number) => {
     const newMessage: Message = {
         id: Date.now().toString(),
         text,
@@ -284,7 +290,7 @@ const App: React.FC = () => {
       }
   }, [activePage, handleRestoreVersion]);
 
-  // --- AI Logic ---
+  // --- AI Logic (Updated for Hierarchical Flow) ---
   const handleStopGeneration = useCallback(() => {
       if (abortControllerRef.current) {
           abortControllerRef.current.abort();
@@ -305,95 +311,123 @@ const App: React.FC = () => {
     
     try {
       const currentArtifact = activePage.generatedArtifact;
-      const isRefinement = currentArtifact.version > 0 || currentArtifact.code.length > 200;
+      // Determine if we are updating existing code (Refinement) or building new (Hierarchical)
+      const isRefinement = currentArtifact.version > 0 && currentArtifact.code.length > 200;
 
-      updateActivePage({ appState: 'planning' });
-      if (signal.aborted) return;
-
-      let currentPlan: PlanData;
       if (isRefinement) {
-         currentPlan = await generateRefinementPlan(currentArtifact.code, text, appSettings);
+         // --- REFINEMENT FLOW (Legacy) ---
+         updateActivePage({ appState: 'planning' });
          if (signal.aborted) return;
-         addMessageToActivePage(`我已分析了您的修改需求，以下是更新计划。`, Sender.AI, AgentType.PLANNER, undefined, currentPlan);
+         
+         const refinementPlan = await generateRefinementPlan(currentArtifact.code, text, appSettings);
+         if (signal.aborted) return;
+         
+         addMessageToActivePage(`分析完成，正在进行局部优化。`, Sender.AI, AgentType.PLANNER, undefined, refinementPlan);
+         updateActivePage({ currentPlan: refinementPlan, appState: 'refining' });
+
+         let finalCode = "";
+         const streamGenerator = refineCodeStream(currentArtifact.code, text, appSettings);
+         
+         for await (const chunk of streamGenerator) {
+             if (signal.aborted) return;
+             finalCode = chunk;
+             setPageData(activeProjectId, activePageId, (p) => ({
+                 ...p,
+                 generatedArtifact: { ...p.generatedArtifact, code: chunk }
+             }));
+         }
+         
+         const newArtifact = {
+             code: finalCode,
+             language: 'html',
+             version: currentArtifact.version + 1,
+             timestamp: Date.now(),
+             commitMessage: '代码优化'
+         };
+         
+         setPageData(activeProjectId, activePageId, (p) => ({
+            ...p,
+            appState: 'ready',
+            generatedArtifact: newArtifact,
+            history: [...p.history, newArtifact]
+         }));
+         addMessageToActivePage(`优化完成 (v${newArtifact.version})。`, Sender.AI, AgentType.REFINER, undefined, undefined, newArtifact.version);
+
       } else {
-         // Pass AppSettings which now contains Vector DB config
-         currentPlan = await generatePlan(text, image, appSettings);
+         // --- HIERARCHICAL GENERATION FLOW ---
+         
+         // 1. Architect Phase
+         updateActivePage({ appState: 'architecting' });
+         const architectPlan = await generateArchitectPlan(text, image, appSettings);
          if (signal.aborted) return;
-         addMessageToActivePage(`我已制定了详细的构建计划。`, Sender.AI, AgentType.PLANNER, undefined, currentPlan);
+         
+         addMessageToActivePage(
+             `架构设计已完成。已定义 ${architectPlan.components.length} 个组件接口契约。`, 
+             Sender.AI, 
+             AgentType.ARCHITECT, 
+             undefined, 
+             architectPlan
+         );
+         updateActivePage({ currentPlan: architectPlan, appState: 'fabricating' });
+
+         // 2. Worker Phase (Parallel)
+         // Generate promises for each component
+         const componentPromises = architectPlan.components.map(spec => 
+             generateComponentCode(spec, appSettings)
+                 .then(code => ({ name: spec.name, code }))
+         );
+         
+         // Wait for all workers to finish
+         // In a real app, we might want to stream individual completions, but Promise.all is simpler for now
+         const results = await Promise.all(componentPromises);
+         if (signal.aborted) return;
+
+         const componentCodes: Record<string, string> = {};
+         results.forEach(r => componentCodes[r.name] = r.code);
+
+         addMessageToActivePage(
+             `所有组件制造完毕 (${results.map(r => r.name).join(', ')})。开始总装...`, 
+             Sender.AI, 
+             AgentType.WORKER
+         );
+         updateActivePage({ appState: 'assembling' });
+
+         // 3. Assembly Phase
+         let finalCode = "";
+         const assemblyStream = generateAssemblyStream(architectPlan, componentCodes, appSettings);
+
+         const nextVersion = (activePage.history.length > 0 ? Math.max(...activePage.history.map(h => h.version)) : 0) + 1;
+
+         for await (const chunk of assemblyStream) {
+             if (signal.aborted) return;
+             finalCode = chunk;
+             setPageData(activeProjectId, activePageId, (p) => ({
+                 ...p,
+                 generatedArtifact: { ...p.generatedArtifact, code: chunk, version: nextVersion }
+             }));
+         }
+
+         const newArtifact = {
+             code: finalCode,
+             language: 'html',
+             version: nextVersion,
+             timestamp: Date.now(),
+             commitMessage: 'Hierarchical Build'
+         };
+
+         setPageData(activeProjectId, activePageId, (p) => ({
+            ...p,
+            appState: 'ready',
+            generatedArtifact: newArtifact,
+            history: [...p.history, newArtifact]
+         }));
+         addMessageToActivePage(`系统构建完成 (v${nextVersion})。`, Sender.AI, AgentType.ASSEMBLER, undefined, undefined, nextVersion);
       }
-      
-      updateActivePage({ currentPlan });
-      if (signal.aborted) return;
-
-      updateActivePage({ appState: isRefinement ? 'refining' : 'coding' });
-      
-      const maxVersion = activePage.history.length > 0 ? Math.max(...activePage.history.map(h => h.version)) : 0;
-      const nextVersion = maxVersion + 1;
-
-      let finalCode = "";
-      let success = false;
-      let retryCount = 0;
-      const MAX_RETRIES = 3;
-
-      while (retryCount < MAX_RETRIES && !success) {
-          if (signal.aborted) return;
-          try {
-              const streamGenerator = isRefinement 
-                  ? refineCodeStream(currentArtifact.code, text, appSettings)
-                  : generateCodeStream(currentPlan, image, appSettings);
-
-              for await (const chunk of streamGenerator) {
-                  if (signal.aborted) return;
-                  finalCode = chunk;
-                  setPageData(activeProjectId, activePageId, (p) => ({
-                      ...p,
-                      generatedArtifact: {
-                          ...p.generatedArtifact,
-                          code: chunk,
-                          version: nextVersion
-                      }
-                  }));
-              }
-              success = true;
-          } catch (error) {
-              if (signal.aborted) return;
-              retryCount++;
-              console.warn(`Attempt ${retryCount} failed:`, error);
-              if (retryCount >= MAX_RETRIES) throw error;
-              addMessageToActivePage(`检测到生成中断 (尝试 ${retryCount}/${MAX_RETRIES})，正在执行自动修复...`, Sender.AI, AgentType.FIXER);
-          }
-      }
-      
-      if (signal.aborted) return;
-
-      const newArtifact: GeneratedArtifact = {
-          code: finalCode,
-          language: 'html',
-          version: nextVersion,
-          timestamp: Date.now(),
-          commitMessage: isRefinement ? '代码优化与更新' : '初始代码生成'
-      };
-
-      setPageData(activeProjectId, activePageId, (p) => ({
-          ...p,
-          appState: 'ready',
-          generatedArtifact: newArtifact,
-          history: [...p.history, newArtifact]
-      }));
-      
-      addMessageToActivePage(
-          isRefinement ? `更新完成 (v${nextVersion})。` : `生成完成 (v${nextVersion})。`, 
-          Sender.AI, 
-          isRefinement ? AgentType.REFINER : AgentType.CODER,
-          undefined,
-          undefined,
-          nextVersion // Pass version for restore capability
-      );
 
     } catch (error) {
       if (signal.aborted) return;
       console.error("Process failed:", error);
-      addMessageToActivePage("抱歉，AI 服务连接不稳定。请稍后重试。", Sender.SYSTEM);
+      addMessageToActivePage("生成过程中发生错误，请重试。", Sender.SYSTEM);
       updateActivePage({ appState: 'idle' });
     } finally {
         if (abortControllerRef.current?.signal === signal) {
@@ -450,8 +484,11 @@ const App: React.FC = () => {
 
         {/* Right Panel: Workspace */}
         <div className="flex-1 h-full overflow-hidden bg-[#1E293B]">
+           {/* Cast plan to any to avoid strict type issues in this legacy component for now, or update Workspace to handle ArchitectPlan too. 
+               Given Workspace mainly displays 'implementation_steps', we might need to adjust it or pass null if ArchitectPlan doesn't match PlanData perfectly. 
+               Ideally Workspace should be updated, but for now we focus on the generation logic. */}
            <Workspace 
-            plan={activePage.currentPlan} 
+            plan={activePage.currentPlan as any} 
             generatedArtifact={activePage.generatedArtifact}
             history={activePage.history}
             onRestoreVersion={handleRestoreVersion}

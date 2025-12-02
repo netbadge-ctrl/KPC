@@ -1,7 +1,8 @@
 
 
 export const INITIAL_CODE = `<!-- KPC AI Forge 环境 -->
-<!-- 预装依赖: Vue 3, Tailwind CSS, @king-design/vue -->
+<!-- 预装依赖: Vue 3, Tailwind CSS -->
+<!-- 组件库: npm install @king-design/vue -S -->
 <div class="flex flex-col items-center justify-center h-screen text-gray-500 space-y-2">
   <p>环境已就绪。</p>
   <p class="text-xs opacity-75">可在对话框中输入指令开始构建。</p>

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, memo } from 'react';
-import { Message, Sender, AgentType, AppState, PlanData, SubmitShortcut } from '../types';
-import { Send, Bot, User, Loader2, Image as ImageIcon, X, ChevronDown, ChevronRight, BrainCircuit, ListChecks, Layers, Wrench, Square, History, Check, RotateCcw, Code2, PenTool, Sparkles } from 'lucide-react';
+import { Message, Sender, AgentType, AppState, PlanData, SubmitShortcut, ArchitectPlan } from '../types';
+import { Send, Bot, User, Loader2, Image as ImageIcon, X, ChevronDown, ChevronRight, BrainCircuit, ListChecks, Layers, Wrench, Square, History, Check, RotateCcw, Code2, PenTool, Sparkles, DraftingCompass, Factory, Hammer } from 'lucide-react';
 
 interface ChatAreaProps {
   messages: Message[];
@@ -12,15 +12,22 @@ interface ChatAreaProps {
   onRestoreVersion?: (version: number) => void;
 }
 
-const PlanCard: React.FC<{ plan: PlanData }> = ({ plan }) => {
+// Type guard for ArchitectPlan
+function isArchitectPlan(plan: any): plan is ArchitectPlan {
+    return (plan as ArchitectPlan).components !== undefined;
+}
+
+const PlanCard: React.FC<{ plan: PlanData | ArchitectPlan }> = ({ plan }) => {
   const [expanded, setExpanded] = useState(false);
+
+  const isArchitect = isArchitectPlan(plan);
 
   return (
     <div className="mt-3 bg-slate-900 border border-slate-700/60 rounded-lg overflow-hidden shadow-sm">
       <div className="px-4 py-3 border-b border-slate-700/60 bg-slate-900 flex items-center justify-between">
          <div className="flex items-center gap-2 text-blue-400 font-medium text-sm">
-            <BrainCircuit size={16} />
-            <span>构建计划</span>
+            {isArchitect ? <DraftingCompass size={16} /> : <BrainCircuit size={16} />}
+            <span>{isArchitect ? "架构设计蓝图" : "构建计划"}</span>
          </div>
          <button 
             onClick={() => setExpanded(!expanded)} 
@@ -40,37 +47,72 @@ const PlanCard: React.FC<{ plan: PlanData }> = ({ plan }) => {
 
          {expanded && (
             <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
-                <div>
-                     <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1">
-                        <Layers size={12} /> 核心组件
-                     </div>
-                     <div className="flex flex-wrap gap-2">
-                        {plan.component_list.map((c, i) => (
-                            <span key={i} className="px-2 py-0.5 bg-slate-800 text-slate-300 rounded text-xs border border-slate-700 font-mono">
-                                {c}
-                            </span>
-                        ))}
-                     </div>
-                </div>
-                 <div>
-                     <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1">
-                        <ListChecks size={12} /> 实施步骤
-                     </div>
-                     <ul className="space-y-1.5">
-                        {plan.implementation_steps.map((step, i) => (
-                            <li key={i} className="flex gap-2 text-slate-400 text-xs">
-                                <span className="text-blue-500 font-mono">{i+1}.</span>
-                                <span>{step.replace(/^\d+\.\s*/, '')}</span>
-                            </li>
-                        ))}
-                     </ul>
-                </div>
+                {isArchitect ? (
+                    // Architect Plan Visualization
+                    <>
+                        <div>
+                             <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1">
+                                <Layers size={12} /> 组件契约 (Components & Contracts)
+                             </div>
+                             <div className="space-y-2">
+                                {(plan as ArchitectPlan).components.map((c, i) => (
+                                    <div key={i} className="bg-slate-800 p-2 rounded border border-slate-700">
+                                        <div className="flex items-center justify-between mb-1">
+                                            <span className="font-mono text-blue-300 text-xs font-bold">&lt;{c.name}&gt;</span>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2 text-[10px]">
+                                            <div className="text-slate-400">Props: <span className="text-emerald-400">{c.props_contract}</span></div>
+                                            <div className="text-slate-400">Emits: <span className="text-orange-400">{c.emits_contract}</span></div>
+                                        </div>
+                                    </div>
+                                ))}
+                             </div>
+                        </div>
+                        <div>
+                             <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1">
+                                <BrainCircuit size={12} /> 全局状态定义
+                             </div>
+                             <pre className="bg-slate-950 p-2 rounded text-[10px] text-slate-400 font-mono overflow-x-auto">
+                                {(plan as ArchitectPlan).global_state_definition}
+                             </pre>
+                        </div>
+                    </>
+                ) : (
+                    // Legacy Plan Visualization
+                    <>
+                        <div>
+                             <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1">
+                                <Layers size={12} /> 核心组件
+                             </div>
+                             <div className="flex flex-wrap gap-2">
+                                {(plan as PlanData).component_list.map((c, i) => (
+                                    <span key={i} className="px-2 py-0.5 bg-slate-800 text-slate-300 rounded text-xs border border-slate-700 font-mono">
+                                        {c}
+                                    </span>
+                                ))}
+                             </div>
+                        </div>
+                         <div>
+                             <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1">
+                                <ListChecks size={12} /> 实施步骤
+                             </div>
+                             <ul className="space-y-1.5">
+                                {(plan as PlanData).implementation_steps.map((step, i) => (
+                                    <li key={i} className="flex gap-2 text-slate-400 text-xs">
+                                        <span className="text-blue-500 font-mono">{i+1}.</span>
+                                        <span>{step.replace(/^\d+\.\s*/, '')}</span>
+                                    </li>
+                                ))}
+                             </ul>
+                        </div>
+                    </>
+                )}
             </div>
          )}
          
          {!expanded && (
              <div className="text-xs text-slate-500 mt-2 flex items-center gap-2 cursor-pointer hover:text-blue-400 transition-colors" onClick={() => setExpanded(true)}>
-                 <span>查看 {plan.implementation_steps.length} 个实施步骤和组件详情</span>
+                 <span>查看详细设计</span>
              </div>
          )}
       </div>
@@ -167,6 +209,9 @@ const ChatArea: React.FC<ChatAreaProps> = ({
         case AgentType.CODER: return <Code2 size={16} />;
         case AgentType.REFINER: return <PenTool size={16} />;
         case AgentType.FORGER: return <Sparkles size={16} />;
+        case AgentType.ARCHITECT: return <DraftingCompass size={16} />;
+        case AgentType.WORKER: return <Factory size={16} />;
+        case AgentType.ASSEMBLER: return <Hammer size={16} />;
         default: return <Bot size={16} />;
     }
   };
@@ -176,6 +221,9 @@ const ChatArea: React.FC<ChatAreaProps> = ({
       if (agent === AgentType.FIXER) return 'bg-orange-600';
       if (agent === AgentType.PLANNER) return 'bg-indigo-600';
       if (agent === AgentType.CODER) return 'bg-emerald-600';
+      if (agent === AgentType.ARCHITECT) return 'bg-cyan-600';
+      if (agent === AgentType.WORKER) return 'bg-amber-600';
+      if (agent === AgentType.ASSEMBLER) return 'bg-pink-600';
       return 'bg-purple-600';
   };
 
@@ -253,7 +301,12 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                 <div className="flex items-center gap-3">
                     <div className="flex items-center gap-2 bg-slate-800 p-3 rounded-lg rounded-tl-none border border-slate-700">
                         <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
-                        <span className="text-xs text-slate-400 font-mono uppercase">AI 正在思考...</span>
+                        <span className="text-xs text-slate-400 font-mono uppercase">
+                            {appState === 'architecting' ? "Architect 正在设计系统架构..." : 
+                             appState === 'fabricating' ? "Workers 正在并行生成组件..." :
+                             appState === 'assembling' ? "Assembler 正在进行总装..." :
+                             "AI 正在思考..."}
+                        </span>
                     </div>
                     {onStop && (
                         <button 

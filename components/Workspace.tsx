@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef, memo } from 'react';
-import { Code, Monitor, History, Check, Clock, LayoutTemplate, Palette, Zap, Box, Loader2, ListChecks, CheckCircle2 } from 'lucide-react';
-import { PlanData, GeneratedArtifact, AppState } from '../types';
+import { Code, Monitor, History, Check, Clock, LayoutTemplate, Palette, Zap, Box, Loader2, ListChecks, CheckCircle2, Terminal } from 'lucide-react';
+import { PlanData, GeneratedArtifact, AppState, ArchitectPlan } from '../types';
 
 interface WorkspaceProps {
-  plan: PlanData | null;
+  plan: PlanData | ArchitectPlan | null;
   generatedArtifact: GeneratedArtifact;
   history?: GeneratedArtifact[];
   onRestoreVersion?: (artifact: GeneratedArtifact) => void;
@@ -63,9 +63,12 @@ const EmptyState = () => (
                 </p>
             </div>
             <div className="flex gap-2 flex-wrap justify-center">
-                 <span className="px-3 py-1 bg-blue-900/20 border border-blue-800/50 rounded-full text-xs font-mono text-blue-300 flex items-center gap-1.5 animate-in fade-in slide-in-from-top-2">
-                    <Box size={12} className="text-blue-500" />
-                    @king-design/vue
+                 <span className="px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-md text-xs font-mono text-slate-300 flex items-center gap-2 shadow-sm animate-in fade-in slide-in-from-top-2">
+                    <Terminal size={12} className="text-slate-500" />
+                    <span className="opacity-50 select-none">$</span>
+                    <span className="text-blue-400">npm install</span>
+                    <span>@king-design/vue</span>
+                    <span className="text-yellow-500/80">-S</span>
                  </span>
             </div>
         </div>
@@ -73,14 +76,18 @@ const EmptyState = () => (
 );
 
 // Progress Overlay Component
-const BuildProgress = ({ plan, currentCode, isComplete }: { plan: PlanData, currentCode: string, isComplete: boolean }) => {
+const BuildProgress = ({ plan, currentCode, isComplete }: { plan: PlanData | ArchitectPlan, currentCode: string, isComplete: boolean }) => {
     const [currentStep, setCurrentStep] = useState(0);
     const [isVisible, setIsVisible] = useState(true);
     const [isFadingOut, setIsFadingOut] = useState(false);
 
+    // Safe access for potential undefined implementation_steps (in ArchitectPlan)
+    const implementationSteps = 'implementation_steps' in plan ? (plan as PlanData).implementation_steps : [];
+    const stepCount = implementationSteps?.length || 0;
+
     useEffect(() => {
         if (isComplete) {
-            setCurrentStep(plan.implementation_steps.length + 1);
+            setCurrentStep(stepCount + 1);
             const timer = setTimeout(() => {
                 setIsFadingOut(true);
             }, 3000); 
@@ -96,7 +103,7 @@ const BuildProgress = ({ plan, currentCode, isComplete }: { plan: PlanData, curr
             setIsVisible(true);
             setIsFadingOut(false);
         }
-    }, [isComplete, plan.implementation_steps.length]);
+    }, [isComplete, stepCount]);
 
     useEffect(() => {
         if (!isComplete) {
@@ -111,7 +118,8 @@ const BuildProgress = ({ plan, currentCode, isComplete }: { plan: PlanData, curr
         }
     }, [currentCode, isComplete]);
 
-    if (!plan || !isVisible) return null;
+    // If it's an ArchitectPlan (no implementation_steps), we skip showing this specific overlay for now.
+    if (!plan || !isVisible || stepCount === 0) return null;
 
     return (
         <div className={`absolute bottom-4 right-4 w-72 bg-slate-900/90 backdrop-blur-md border border-slate-700/50 rounded-lg shadow-2xl overflow-hidden z-20 transition-all duration-500 ease-in-out ${
@@ -129,7 +137,7 @@ const BuildProgress = ({ plan, currentCode, isComplete }: { plan: PlanData, curr
                 )}
             </div>
             <div className="p-2 max-h-48 overflow-y-auto custom-scrollbar space-y-1">
-                {plan.implementation_steps.map((step, idx) => {
+                {implementationSteps.map((step, idx) => {
                     const stepNum = idx + 1;
                     const isDone = currentStep >= stepNum || isComplete;
                     const isCurrent = currentStep === stepNum - 1 && !isComplete; 

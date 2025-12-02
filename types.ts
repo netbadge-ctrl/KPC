@@ -7,6 +7,9 @@ export enum Sender {
 
 export enum AgentType {
   PLANNER = 'Planner',
+  ARCHITECT = 'Architect', // New
+  WORKER = 'Worker',       // New
+  ASSEMBLER = 'Assembler', // New
   CODER = 'Coder',
   REFINER = 'Refiner',
   FIXER = 'AutoFixer',
@@ -20,10 +23,11 @@ export interface Message {
   image?: string; // Base64 encoded image string
   agent?: AgentType;
   timestamp: number;
-  contentData?: PlanData | null; // For displaying structured data
+  contentData?: PlanData | ArchitectPlan | null; // Updated to support ArchitectPlan
   relatedVersion?: number; // Links message to a specific artifact version
 }
 
+// Legacy Plan (Simple)
 export interface PlanData {
   thought_process: string;
   component_list: string[];
@@ -31,7 +35,22 @@ export interface PlanData {
   implementation_steps: string[];
 }
 
-export type AppState = 'idle' | 'planning' | 'coding' | 'refining' | 'ready';
+// New Hierarchical Plan
+export interface ComponentSpec {
+  name: string;
+  description: string;
+  props_contract: string; // e.g., "items: Array, isLoading: Boolean"
+  emits_contract: string; // e.g., "update:query, delete-item"
+}
+
+export interface ArchitectPlan {
+  thought_process: string;
+  global_state_definition: string; // Description of the shared reactive state
+  components: ComponentSpec[];
+  main_logic_flow: string; // How components interact in the main App
+}
+
+export type AppState = 'idle' | 'planning' | 'architecting' | 'fabricating' | 'assembling' | 'coding' | 'refining' | 'ready';
 
 export interface GeneratedArtifact {
   code: string;
@@ -46,7 +65,7 @@ export interface Page {
   name: string;
   messages: Message[];
   appState: AppState;
-  currentPlan: PlanData | null;
+  currentPlan: PlanData | ArchitectPlan | null;
   generatedArtifact: GeneratedArtifact; // The currently active/viewed artifact
   history: GeneratedArtifact[]; // All saved versions
 }
